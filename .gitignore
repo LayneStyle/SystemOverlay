@@ -11,6 +11,7 @@
 [Oo]bj/
 publish/
 Publish/
+.agent/
 
 # Logs
 *.log
