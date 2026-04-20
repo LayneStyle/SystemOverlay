@@ -1,0 +1,30 @@
+# Visual Studio / Rider / IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build and Publish results
+[Bb]in/
+[Oo]bj/
+publish/
+Publish/
+
+# Logs
+*.log
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+.DS_Store
+
+# ReSharper / JetBrains
+_ReSharper*/
+*.ReSharper
+
+# Temp files
+*.tmp
+*.bak
+*.swp
