@@ -21,17 +21,22 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         _hardware = new HardwareService();
-        _settings = SettingsService.Load();
+        try
+        {
+            _settings = SettingsService.Load();
+            _viewModel = new MainViewModel(_hardware, _settings);
+            DataContext = _viewModel;
 
-        _viewModel = new MainViewModel(_hardware, _settings);
-        DataContext = _viewModel;
-        
-        _viewModel.AlertStateChanged += OnAlertStateChanged;
+            _viewModel.AlertStateChanged += OnAlertStateChanged;
 
-        ApplySettings();
-
-        // Start background polling loop
-        _viewModel.StartPolling();
+            ApplySettings();
+            _viewModel.StartPolling();
+        }
+        catch
+        {
+            _hardware.Dispose();
+            throw;
+        }
     }
 
     private void ApplySettings()
@@ -42,11 +47,19 @@ public partial class MainWindow : Window
         PinMenuItem.IsChecked = _settings.IsPinned;
         PinButton.Opacity = _settings.IsPinned ? 1.0 : 0.4;
 
-        if (_settings.OverlayScale > 0)
+        // Only restore width if it's a real saved pixel value (not the first-run default)
+        if (_settings.OverlayScale > 100)
             Width = _settings.OverlayScale;
 
-        // Note: Actual settings data context for settings window is passed directly,
-        // overlay uses MainViewModel as DataContext, not _settings.
+        // Apply font scale
+        if (_settings.FontScale > 0 && Math.Abs(_settings.FontScale - 1.0) > 0.01)
+        {
+            MainBorder.LayoutTransform = new ScaleTransform(_settings.FontScale, _settings.FontScale);
+        }
+        else
+        {
+            MainBorder.LayoutTransform = Transform.Identity;
+        }
     }
 
     // ── Drag ──────────────────────────────────────────────
@@ -156,6 +169,7 @@ public partial class MainWindow : Window
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         _viewModel.Dispose();
+        GpuUsageService.Cleanup();
         _settings.WindowX = Left;
         _settings.WindowY = Top;
         _settings.OverlayScale = Width;

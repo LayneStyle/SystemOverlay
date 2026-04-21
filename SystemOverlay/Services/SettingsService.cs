@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 
@@ -27,8 +28,9 @@ public static class SettingsService
             return JsonSerializer.Deserialize<Models.AppSettings>(json, JsonOptions)
                    ?? new Models.AppSettings();
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"[SystemOverlay] Settings load failed: {ex.Message}");
             return new Models.AppSettings();
         }
     }
@@ -41,9 +43,9 @@ public static class SettingsService
             var json = JsonSerializer.Serialize(settings, JsonOptions);
             File.WriteAllText(SettingsFile, json);
         }
-        catch
+        catch (Exception ex)
         {
-            // Silently fail — don't crash the overlay for a settings issue
+            Debug.WriteLine($"[SystemOverlay] Settings save failed: {ex.Message}");
         }
     }
 }

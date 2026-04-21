@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -16,6 +17,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private AppSettings _settings;
     private PeriodicTimer? _timer;
     private CancellationTokenSource? _cts;
+    private readonly SemaphoreSlim _pollGuard = new(1, 1);
 
     [ObservableProperty]
     private double _windowOpacity = 1.0;
@@ -53,6 +55,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     // Disks
     public ObservableCollection<DiskInfo> Disks { get; } = new();
 
+    // Section visibility (bound from XAML)
+    [ObservableProperty] private bool _showCpu = true;
+    [ObservableProperty] private bool _showGpu = true;
+    [ObservableProperty] private bool _showRam = true;
+    [ObservableProperty] private bool _showNetwork = true;
+    [ObservableProperty] private bool _showDisk = true;
+
     // Expand state
     public bool CpuExpanded { get; set; }
     public bool GpuExpanded { get; set; }
@@ -63,7 +72,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _hardware = hardware;
         _settings = settings;
 
-        // Initialize Brushes
+        ApplyVisibility(settings);
         UpdateColors();
     }
 
@@ -71,13 +80,23 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         bool intervalChanged = _settings.UpdateIntervalMs != newSettings.UpdateIntervalMs;
         _settings = newSettings;
-        
+
+        ApplyVisibility(newSettings);
         UpdateColors();
 
         if (intervalChanged)
         {
             RestartPolling();
         }
+    }
+
+    private void ApplyVisibility(AppSettings s)
+    {
+        ShowCpu = s.ShowCpu;
+        ShowGpu = s.ShowGpu;
+        ShowRam = s.ShowRam;
+        ShowNetwork = s.ShowNetwork;
+        ShowDisk = s.ShowDisk;
     }
 
     private static readonly System.Windows.Media.SolidColorBrush CyanB = new(System.Windows.Media.Color.FromRgb(0x00, 0xD4, 0xFF));
@@ -124,23 +143,34 @@ public partial class MainViewModel : ObservableObject, IDisposable
             {
                 if (token.IsCancellationRequested) break;
 
-                // 1. Get metrics in background thread (Ring0 calls wait here without blocking UI)
-                var metrics = _hardware.GetMetrics();
-                var disks = HardwareService.GetDiskSpaces();
-                
-                var topCpu = CpuExpanded ? ProcessMonitorService.GetTopCpuProcesses(3) : null;
-                var topRam = RamExpanded ? ProcessMonitorService.GetTopRamProcesses(3) : null;
-                var topGpu = GpuExpanded ? ProcessMonitorService.GetTopGpuProcesses(3) : null;
-
-                // 2. Dispatch the results to UI thread bindings
-                _ = Application.Current.Dispatcher.InvokeAsync(() =>
+                // Guard: only one poll at a time (LHM is not thread-safe)
+                if (!await _pollGuard.WaitAsync(0, token)) continue;
+                try
                 {
-                    UpdateUI(metrics, disks, topCpu, topRam, topGpu);
-                });
+                    // Run hardware reads on a dedicated thread to avoid blocking the timer
+                    var (metrics, disks, topCpu, topRam, topGpu) = await Task.Run(() =>
+                    {
+                        var m = _hardware.GetMetrics();
+                        var d = HardwareService.GetDiskSpaces();
+                        var cpu = CpuExpanded ? ProcessMonitorService.GetTopCpuProcesses(3) : null;
+                        var ram = RamExpanded ? ProcessMonitorService.GetTopRamProcesses(3) : null;
+                        var gpu = GpuExpanded ? ProcessMonitorService.GetTopGpuProcesses(3) : null;
+                        return (m, d, cpu, ram, gpu);
+                    }, token);
+
+                    _ = Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        UpdateUI(metrics, disks, topCpu, topRam, topGpu);
+                    });
+                }
+                finally
+                {
+                    _pollGuard.Release();
+                }
             }
         }
-        catch (OperationCanceledException) { /* expected */ }
-        catch (Exception) { /* log if needed */ }
+        catch (OperationCanceledException) { /* expected on shutdown */ }
+        catch (Exception ex) { Debug.WriteLine($"[SystemOverlay] PollMetrics error: {ex.Message}"); }
     }
 
     private void UpdateUI(HardwareMetrics m, List<DiskInfo> disks, 
@@ -187,9 +217,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         NetUpText = $"↑ {FormatSpeed(m.NetUploadKBs)}";
         NetDownText = $"↓ {FormatSpeed(m.NetDownloadKBs)}";
 
-        // Disks
-        Disks.Clear();
-        foreach (var disk in disks) Disks.Add(disk);
+        // Disks — sync in-place to avoid flicker
+        SyncDisks(disks);
 
         // Processes
         if (topCpu != null) SyncCollection(CpuProcesses, topCpu);
@@ -204,6 +233,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         target.Clear();
         foreach (var item in source) target.Add(item);
+    }
+
+    private void SyncDisks(List<DiskInfo> source)
+    {
+        // Update existing entries, add new, remove stale
+        for (int i = 0; i < source.Count; i++)
+        {
+            if (i < Disks.Count)
+            {
+                var existing = Disks[i];
+                var incoming = source[i];
+                if (existing.Name == incoming.Name)
+                {
+                    existing.UsedGb = incoming.UsedGb;
+                    existing.TotalGb = incoming.TotalGb;
+                    existing.ReadMBps = incoming.ReadMBps;
+                    existing.WriteMBps = incoming.WriteMBps;
+                }
+                else
+                {
+                    Disks[i] = incoming;
+                }
+            }
+            else
+            {
+                Disks.Add(source[i]);
+            }
+        }
+        while (Disks.Count > source.Count)
+            Disks.RemoveAt(Disks.Count - 1);
     }
 
     private static string FormatSpeed(float kbs)
@@ -233,6 +292,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         StopPolling();
+        _pollGuard.Dispose();
         GC.SuppressFinalize(this);
     }
 }

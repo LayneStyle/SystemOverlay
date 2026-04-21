@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Win32;
 
 namespace SystemOverlay.Services;
@@ -14,7 +15,11 @@ public static class AutoStartService
             using var key = Registry.CurrentUser.OpenSubKey(RegistryPath, false);
             return key?.GetValue(AppName) != null;
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[SystemOverlay] AutoStart check failed: {ex.Message}");
+            return false;
+        }
     }
 
     public static void SetEnabled(bool enable)
@@ -35,9 +40,9 @@ public static class AutoStartService
                 key.DeleteValue(AppName, false);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Silently fail — registry access might be restricted
+            Debug.WriteLine($"[SystemOverlay] AutoStart set failed: {ex.Message}");
         }
     }
 }

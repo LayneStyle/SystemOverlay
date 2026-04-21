@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using LibreHardwareMonitor.Hardware;
 using SystemOverlay.Models;
@@ -135,12 +136,15 @@ public class HardwareService : IDisposable
     public static List<DiskInfo> GetDiskSpaces()
     {
         var disks = new List<DiskInfo>();
+        var activeDrives = new HashSet<string>();
+
         foreach (var drive in DriveInfo.GetDrives())
         {
             if (!drive.IsReady || drive.DriveType != DriveType.Fixed)
                 continue;
 
             var driveName = drive.Name.TrimEnd('\\');
+            activeDrives.Add(driveName);
             var totalGb = drive.TotalSize / (1024f * 1024f * 1024f);
             var freeGb = drive.AvailableFreeSpace / (1024f * 1024f * 1024f);
             
@@ -149,7 +153,6 @@ public class HardwareService : IDisposable
 
             try
             {
-                // Format for counter is physical disk (e.g. "0 C:") but logical disk "C:" also exists in "LogicalDisk" category
                 if (!_readCounters.ContainsKey(driveName))
                 {
                     _readCounters[driveName] = new System.Diagnostics.PerformanceCounter("LogicalDisk", "Disk Read Bytes/sec", driveName);
@@ -163,9 +166,9 @@ public class HardwareService : IDisposable
                     writeMBps = _writeCounters[driveName].NextValue() / (1024f * 1024f);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Performance counters might be broken on the user's system, ignore silently
+                Debug.WriteLine($"[SystemOverlay] PerfCounter error for {driveName}: {ex.Message}");
             }
 
             disks.Add(new DiskInfo
@@ -177,6 +180,17 @@ public class HardwareService : IDisposable
                 WriteMBps = writeMBps
             });
         }
+
+        // Clean up counters for drives that no longer exist
+        var staleKeys = _readCounters.Keys.Where(k => !activeDrives.Contains(k)).ToList();
+        foreach (var key in staleKeys)
+        {
+            _readCounters[key].Dispose();
+            _readCounters.Remove(key);
+            _writeCounters[key].Dispose();
+            _writeCounters.Remove(key);
+        }
+
         return disks;
     }
 
@@ -191,6 +205,15 @@ public class HardwareService : IDisposable
     public void Dispose()
     {
         _computer.Close();
+        DisposeCounters();
         GC.SuppressFinalize(this);
+    }
+
+    private static void DisposeCounters()
+    {
+        foreach (var c in _readCounters.Values) c.Dispose();
+        foreach (var c in _writeCounters.Values) c.Dispose();
+        _readCounters.Clear();
+        _writeCounters.Clear();
     }
 }

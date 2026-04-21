@@ -43,16 +43,16 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ProgressBar">
-                        <Border x:Name="PART_Track"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="2">
-                            <Border x:Name="PART_Indicator"
-                                    Background="{TemplateBinding Foreground}"
-                                    CornerRadius="2"
-                                    HorizontalAlignment="Left" />
-                        </Border>
+                        <Grid>
+                            <Border x:Name="PART_Track"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="2"/>
+                            <Grid x:Name="PART_Indicator"
+                                  HorizontalAlignment="Left">
+                                <Border Background="{TemplateBinding Foreground}"
+                                        CornerRadius="2"/>
+                            </Grid>
+                        </Grid>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -174,7 +174,7 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Name, StringFormat='  \{0\}'}" Style="{StaticResource ProcessRow}" Foreground="#88FFFFFF"/>
-                                        <TextBlock Text="{Binding Value, StringFormat='\{0:F0\} CPU time'}" Foreground="#AAFFFFFF" HorizontalAlignment="Right" Grid.Column="1">
+                                        <TextBlock Text="{Binding DisplayValue}" Foreground="#AAFFFFFF" HorizontalAlignment="Right" Grid.Column="1">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock" BasedOn="{StaticResource ProcessRow}">
                                                     <Style.Triggers>
@@ -220,7 +220,7 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Name, StringFormat='  \{0\}'}" Style="{StaticResource ProcessRow}" Foreground="#88FFFFFF"/>
-                                        <TextBlock Text="{Binding Value, StringFormat='\{0:F0\} %'}" Foreground="#AAFFFFFF" HorizontalAlignment="Right" Grid.Column="1">
+                                        <TextBlock Text="{Binding DisplayValue}" Foreground="#AAFFFFFF" HorizontalAlignment="Right" Grid.Column="1">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock" BasedOn="{StaticResource ProcessRow}">
                                                     <Style.Triggers>
@@ -265,7 +265,7 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Name, StringFormat='  \{0\}'}" Style="{StaticResource ProcessRow}" Foreground="#88FFFFFF"/>
-                                        <TextBlock Text="{Binding Value, StringFormat='\{0:F0\} MB'}" Foreground="#AAFFFFFF" HorizontalAlignment="Right" Grid.Column="1">
+                                        <TextBlock Text="{Binding DisplayValue}" Foreground="#AAFFFFFF" HorizontalAlignment="Right" Grid.Column="1">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock" BasedOn="{StaticResource ProcessRow}">
                                                     <Style.Triggers>

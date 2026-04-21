@@ -1,3 +1,6 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace SystemOverlay.Models;
 
 public class HardwareMetrics
@@ -25,14 +28,68 @@ public class HardwareMetrics
     public List<DiskInfo> Disks { get; set; } = [];
 }
 
-public class DiskInfo
+public class DiskInfo : INotifyPropertyChanged
 {
-    public string Name { get; set; } = "";
-    public float UsedGb { get; set; }
-    public float TotalGb { get; set; }
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private string _name = "";
+    private float _usedGb;
+    private float _totalGb;
+    private float _readMBps;
+    private float _writeMBps;
+
+    public string Name
+    {
+        get => _name;
+        set { if (_name != value) { _name = value; OnPropertyChanged(); } }
+    }
+
+    public float UsedGb
+    {
+        get => _usedGb;
+        set
+        {
+            if (Math.Abs(_usedGb - value) > 0.01f)
+            {
+                _usedGb = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(UsagePercent));
+                OnPropertyChanged(nameof(IsWarning));
+            }
+        }
+    }
+
+    public float TotalGb
+    {
+        get => _totalGb;
+        set
+        {
+            if (Math.Abs(_totalGb - value) > 0.01f)
+            {
+                _totalGb = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(UsagePercent));
+                OnPropertyChanged(nameof(IsWarning));
+            }
+        }
+    }
+
     public float UsagePercent => TotalGb > 0 ? (UsedGb / TotalGb) * 100f : 0f;
-    
-    public float ReadMBps { get; set; }
-    public float WriteMBps { get; set; }
+
+    public float ReadMBps
+    {
+        get => _readMBps;
+        set { if (Math.Abs(_readMBps - value) > 0.01f) { _readMBps = value; OnPropertyChanged(); } }
+    }
+
+    public float WriteMBps
+    {
+        get => _writeMBps;
+        set { if (Math.Abs(_writeMBps - value) > 0.01f) { _writeMBps = value; OnPropertyChanged(); } }
+    }
+
     public bool IsWarning => UsagePercent >= 90f;
+
+    private void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

@@ -14,7 +14,7 @@ public class AppSettings
 
     // Appearance
     public double FontScale { get; set; } = 1.0;   // 0.8 – 1.5
-    public double OverlayScale { get; set; } = 1.0; // 0.7 – 2.0
+    public double OverlayScale { get; set; } = 0;   // Saved window Width in px (0 = use XAML default)
     public bool AutoStart { get; set; }
 
     // Threshold alerts — overlay forces foreground when exceeded
